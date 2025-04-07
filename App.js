@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { StyleSheet, Text, View, TextInput, TouchableOpacity, FlatList } from 'react-native';
+import { useState, useEffect } from 'react';
+import { StyleSheet, Text, View, TextInput, TouchableOpacity, FlatList, Keyboard } from 'react-native';
 import { TextInputMask } from 'react-native-masked-text';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -8,19 +8,38 @@ export default function App() {
   const[nomeProduto, setNomeProduto] = useState("")
   const[precoProduto, setPrecoProduto] = useState()
   const[dados, setDados] = useState([])
+  const[produtoEditado,setProdutoEditado] = useState(null)
+
+  useEffect(()=>{
+    buscarDados()
+  },[])
 
   async function Salvar(){
+    Keyboard.dismiss()
     let produtos = []
 
-    if(await AsyncStorage.getItem("PRODUTOS") != null){
+    //Carregar os produtos que estão em PRODUTOS
+    if (await AsyncStorage.getItem("PRODUTOS") != null) {
       produtos = JSON.parse(await AsyncStorage.getItem("PRODUTOS"))
     }
-    //Adiciona no Array
-    produtos.push({nome:nomeProduto, preco:precoProduto})
-    //Salvando dados no Async Storage
+    
+    if (produtoEditado) {
+      produtos[produtoEditado.index] = { nome: nomeProduto, preco: precoProduto }
+    } else {
+      //Adiciona no Array
+      produtos.push({ nome: nomeProduto, preco: precoProduto })
+    }
+
+    //Salvandos dados no Async Storage
     await AsyncStorage.setItem("PRODUTOS", JSON.stringify(produtos))
 
-    alert("PRODUTO CADASTRADO")
+    alert(produtoEditado?"PRODUTO ATUALIZADO!": "PRODUTO CADASTRADO!")
+    setProdutoEditado(null)
+
+    //Limpando o formulário
+    setNomeProduto('')
+    setPrecoProduto('')
+
     buscarDados()
   }
 
@@ -28,6 +47,22 @@ export default function App() {
     const p = await AsyncStorage.getItem("PRODUTOS")
     setDados(JSON.parse(p))
     console.log(p)
+  }
+
+  async function deletarProduto(index) {
+    const tempDados = dados
+    const dadosAtualizado = tempDados.filter((item, ind)=>{
+      return ind!==index
+    })
+    setDados(dadosAtualizado)
+    await AsyncStorage.setItem("PRODUTOS", JSON.stringify(dadosAtualizado))
+  }
+
+  function editarProduto(index){
+    const produto = dados[index]
+    setNomeProduto(produto.nome)
+    setPrecoProduto(produto.preco)
+    setProdutoEditado({index})
   }
 
   return (
@@ -48,15 +83,35 @@ export default function App() {
       />
 
       <TouchableOpacity style={styles.btn} onPress={Salvar}>
-        <Text style={{color:"white"}}>CADASTRAR</Text>
+        <Text style={{color:"white"}}>{produtoEditado?"ATUALIZAR":"CADASTRAR"}</Text>
       </TouchableOpacity>
 
       <FlatList
         data={dados}
         renderItem={({item,index})=>{
-          return(
+          if(!item || !item.nome) return null;
+          return(            
             <View style={styles.listarFlat}>
-              <Text>NOME: {item.nome} - PREÇO: {item.preco}</Text>
+              <View>
+                <Text>NOME: {item.nome} - PREÇO: {item.preco}</Text>
+              </View>
+              <View style={{flexDirection: "row"}}>
+
+                <TouchableOpacity 
+                style={styles.btnExcluir}
+                onPress={()=>deletarProduto(index)}
+                >
+                  <Text>Excluir</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity 
+                style={styles.btnEditar}
+                onPress={()=>editarProduto(index)}
+                >
+                  <Text>Editar</Text>
+                </TouchableOpacity>
+
+              </View>
             </View>
           )
         }}
@@ -99,5 +154,21 @@ const styles = StyleSheet.create({
     marginVertical: 3,
     marginTop: 10,
     borderRadius: 10
+  },
+  btnExcluir: {
+    backgroundColor: "red",
+    width: 100,
+    borderRadius: 15,
+    alignItems: "center",
+    height: 21,
+    marginTop: 7
+  },
+  btnEditar: {
+    backgroundColor: "orange",
+    width: 100,
+    borderRadius: 15,
+    alignItems: "center",
+    height: 21,
+    marginTop: 7
   }
 });
